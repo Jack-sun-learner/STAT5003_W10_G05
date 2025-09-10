@@ -1,0 +1,233 @@
+---
+title: "STAT5003_report1"
+author: "W10_G05"
+date: "2025-09-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Project Report: Week 7 - Exploratory Data Analysis & Project Planning for Australian Health Disparities
+
+## 1. Executive Summary
+
+This report outlines the project plan and preliminary exploratory data analysis (EDA) for a binary classification task. The primary objective is to develop a predictive model that can classify individuals as either 'healthy' or 'diseased' based on a comprehensive dataset of demographic and behavioral factors. A secondary but equally critical aim is to identify how these factors may contribute to health disparities, a significant public health issue in Australia. The methodology employed begins with a thorough data quality assessment and cleaning process, followed by an in-depth EDA to uncover relationships between variables and the target health status.
+
+Initial findings from the dataset suggest that ....
+
+## 2. Problem Definition: Classifying Health Status and Disparities
+
+The research problem centers on the ability of demographic and behavioral factors to classify individuals as 'healthy' or 'diseased' and to explore how these factors manifest as health disparities within a diverse population. The significance of this problem extends beyond a simple predictive task. Public health bodies and policymakers in Australia and globally are increasingly focused on understanding the social determinants of health to design more effective, equitable, and preventative health strategies. Identifying which factors most strongly correlate with disease status provides crucial insights for targeted public health campaigns and resource allocation.
+
+The core of the problem is a supervised learning task. The goal is to predict the binary target variable, `target`, which is explicitly labeled as either `healthy` or `diseased` in the provided dataset. The predictive features, or the independent variables, span a wide range of data points. These include demographic information such as `age`, `gender`, `education_level`, and `income`; behavioral and lifestyle factors like `sleep_quality`, `stress_level`, and `physical_activity`; and various clinical and physical measurements. The complexity arises from the number and diversity of these features, which may have linear, non-linear, or interactive relationships with the target variable. A key objective of this project is not merely to achieve high predictive accuracy but also to interpret the model's findings to better understand the mechanisms behind health outcomes and potential disparities. This requires a meticulous and nuanced approach to data analysis and model selection, ensuring that the insights derived are both statistically sound and clinically meaningful.
+
+## 3. Data Description and Source Analysis
+
+```{r}
+# Load the necessary libraries
+library(readr)
+library(dplyr)
+
+# Load the dataset
+health_data <- read_csv("health_lifestyle_classification.csv")
+
+# Identify and address missing values
+missing_values <- colSums(is.na(health_data))
+print("Missing values per column:")
+print(missing_values[missing_values > 0])
+
+```
+
+## 4. Data Cleaning and Preparation
+
+.
+
+**High-level steps**
+
+1.  Load data & libraries.
+
+```{r setup-clean, echo=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(janitor)
+library(naniar)       # visualise missingness
+library(caret)        # createDataPartition, nearZeroVar, findCorrelation
+library(fastDummies)  # quick dummy creation
+set.seed(123)         # reproducibility
+```
+
+```{r loadinspect, echo = TRUE}
+raw <- read_csv("health_lifestyle_classification.csv") %>% 
+  clean_names() 
+```
+
+2.  Remove obvious non-predictive columns IDs / timestamps usually leak no predictive information and can confuse some pipelines.
+
+```{r}
+raw <- raw %>% select(-survey_code)
+```
+
+3.  Stratified train/test split — before fitting imputers/scalers Splitting first avoids leakage from global imputations or scaling. Stratifying preserves the class ratio.
+
+```{r, echo = FALSE}
+# ensure target exists and is factor
+raw <- raw %>% mutate(target = factor(target, levels=c("healthy","diseased")))
+
+# stratified split (caret)
+train_idx <- caret::createDataPartition(raw$target, p = 0.8, list = FALSE)
+train <- raw[train_idx, ]
+test  <- raw[-train_idx, ]
+
+# quick check
+prop.table(table(train$target))
+prop.table(table(test$target))
+```
+
+4.  Missingness analysis (on training set)
+
+```{r}
+# Missing percentages in training
+train_miss <- train %>% summarise(across(everything(), ~ mean(is.na(.x)))) %>% pivot_longer(everything(), names_to="var", values_to="miss_pct") %>% arrange(desc(miss_pct))
+train_miss %>% filter(miss_pct > 0) %>% print(n=Inf)
+```
+
+We decide to drop variables with over 50% missing values. According to above analysis, there is no columns over 50% missing values.
+
+5.  Type conversion: identify numeric vs categorical & ordinal treatment
+
+```{r}
+# Identify numeric and categorical columns (exclude target)
+predictor_names <- setdiff(names(train), "target")
+
+num_vars  <- train %>% select(all_of(predictor_names)) %>% select(where(is.numeric)) %>% names()
+cat_vars  <- train %>% select(all_of(predictor_names)) %>% select(where(~is.character(.x) | is.factor(.x))) %>% names()
+
+# convert character categorical to factor (use training levels later for test)
+train <- train %>% mutate(across(all_of(cat_vars), ~ as.factor(.x)))
+for (v in cat_vars) {
+  test[[v]] <- factor(test[[v]], levels = levels(train[[v]]))    # unseen levels will be NA - handled next
+}
+```
+
+6.  Imputation — train-derived rules (median for numeric; mode for categorical).
+
+```{r}
+# Helpers --- generated by CHATGPT
+get_mode <- function(x) {
+  ux <- na.omit(unique(x))
+  if(length(ux)==0) return(NA)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+# Numeric medians computed on training
+num_medians <- sapply(train[num_vars], function(x) median(x, na.rm = TRUE))
+
+# Categorical modes computed on training
+cat_modes <- sapply(train[cat_vars], get_mode)
+
+# Apply imputations: replace NA in both train and test using train-derived values
+# Impute numerics
+for (v in num_vars) {
+  train[[v]] <- replace(train[[v]], is.na(train[[v]]), num_medians[[v]])
+  test[[v]]  <- replace(test[[v]],  is.na(test[[v]]),  num_medians[[v]])
+}
+
+# Impute categoricals
+for (v in cat_vars) {
+  # train imputation
+  train[[v]] <- as.character(train[[v]])
+  train[[v]][is.na(train[[v]])] <- cat_modes[[v]]
+  train[[v]] <- factor(train[[v]])
+
+  # test imputation
+  test[[v]] <- as.character(test[[v]])
+  test[[v]][is.na(test[[v]])] <- cat_modes[[v]]
+
+  # unseen categories → "Other"
+  unseen <- setdiff(unique(test[[v]]), levels(train[[v]]))
+  test[[v]][test[[v]] %in% unseen] <- "Other"
+
+  test[[v]] <- factor(test[[v]], levels = c(levels(train[[v]]), "Other"))
+}
+```
+
+7.  Outliers: winsorize numeric features using train thresholds (This part of code is generated by AI) Winsorizing caps extreme values that otherwise distort scaling and influence linear models. Using train-derived thresholds avoids test leakage.
+
+```{r}
+winsorize_train_thresholds <- map(num_vars, ~ {
+  v <- .x
+  qs <- quantile(train[[v]], probs = c(0.01, 0.99), na.rm = TRUE)
+  list(low = qs[1], high = qs[2])
+})
+names(winsorize_train_thresholds) <- num_vars
+
+winsorize_vec <- function(x, low, high) {
+  x[x < low]  <- low
+  x[x > high] <- high
+  x
+}
+
+# Apply winsorization on training and test using train thresholds
+for (v in num_vars) {
+  thr <- winsorize_train_thresholds[[v]]
+  train[[v]] <- winsorize_vec(train[[v]], thr$low, thr$high)
+  test[[v]]  <- winsorize_vec(test[[v]], thr$low, thr$high)
+}
+```
+
+8.  Remove near-zero-variance predictors and highly correlated numeric predictors This is because it exists multicollinearity if not removing highly correlated predictors.
+
+```{r}
+# Near-zero variance (training)
+nzv_info <- caret::nearZeroVar(train %>% select(-target), saveMetrics = TRUE)
+nzv_cols <- rownames(nzv_info)[nzv_info$nzv]
+nzv_cols
+
+# Drop NZV cols from both sets
+train <- train %>% select(-all_of(nzv_cols))
+test  <- test  %>% select(-all_of(nzv_cols))
+
+# Update numeric list after removals
+num_vars <- intersect(num_vars, names(train))
+
+# High correlation removal (training numeric only)
+if (length(num_vars) >= 2) {
+  cor_mat <- cor(train %>% select(all_of(num_vars)), use = "pairwise.complete.obs")
+  highCorr_idx <- caret::findCorrelation(cor_mat, cutoff = 0.90)  # threshold can be 0.85-0.95 based on preference
+  highCorr_cols <- colnames(cor_mat)[highCorr_idx]
+  highCorr_cols
+  # Drop them
+  train <- train %>% select(-all_of(highCorr_cols))
+  test  <- test  %>% select(-all_of(highCorr_cols))
+  # update num_vars
+  num_vars <- setdiff(num_vars, highCorr_cols)
+}
+# ensure train/test alignment
+for (v in cat_vars) {
+  test[[v]] <- factor(test[[v]], levels = levels(train[[v]]))
+}
+
+train_final <- train
+test_final  <- test
+```
+
+9. Final check and output modified dataset
+
+```{r}
+# Confirm no NAs remain in predictors
+sum(is.na(train_final))
+sum(is.na(test_final))
+
+# Confirm target still exists in train_final/test_final
+if(!"target" %in% names(train_final)) stop("Target missing from train_final!")
+
+
+# Optionally export CSVs for modelling stage
+write_csv(train_final, "train_processed.csv")
+write_csv(test_final,  "test_processed.csv")
+```
+
+## 5. Explore and Visualize data
+
+## 6. Modelling Plan
