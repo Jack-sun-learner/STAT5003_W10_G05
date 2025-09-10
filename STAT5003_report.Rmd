@@ -25,6 +25,34 @@ The core of the problem is a supervised learning task. The goal is to predict th
 
 ## 3. Data Description and Source Analysis
 
+The dataset originates from a health and lifestyle survey where individuals reported daily habits and underwent basic health measurements. Kaggle is only the hosting platform. The actual data is derived from health, lifestyle, and genetic risk factors relevant to disease prediction.
+
+Dataset Description
+•	Samples (rows): 100,000
+•	Variables (columns): 48
+  o	Mix of numeric variables (e.g., age, height, weight, blood_pressure, daily_steps, insulin)
+  o	Categorical variables (e.g., gender, smoking_status, family_history, diet_type, gene_marker_flag)
+
+Outcome Variable
+The target/outcome variable is "disease", which indicates whether the individual is at risk or not (categorical).
+
+Challenges Anticipated
+1.	Missing values: Several key health metrics contain missing data:
+  o	Blood pressure: ~7.6% missing
+  o	Heart rate: ~14% missing
+  o	Insulin: ~16% missing
+  o	Daily steps: ~8% missing
+  o	Alcohol consumption: ~14% missing
+  o	Income: ~8% missing
+  o	Gene marker flag: ~10% missing
+2.	High dimensionality: With 48 variables, feature selection or dimensionality reduction may be required to avoid overfitting.
+3.	Data quality issues: Possible self-reported lifestyle variables (e.g., diet, alcohol, exercise) may be noisy or biased.
+4.	Class imbalance: The "disease" outcome variable may be skewed toward one class, which could challenge predictive modeling.
+
+Total Variables: 48
+•	Categorical: 18 (e.g., gender, sleep_quality, alcohol_consumption, smoking_level, diet_type, job_type, education_level)
+•	Numeric: 30 (e.g., age, height, weight, BMI variants, waist_size, blood_pressure, heart_rate, insulin, daily_steps)
+
 ```{r}
 # Load the necessary libraries
 library(readr)
