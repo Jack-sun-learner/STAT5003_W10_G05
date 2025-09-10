@@ -25,46 +25,55 @@ The core of the problem is a supervised learning task. The goal is to predict th
 
 ## 3. Data Description and Source Analysis
 
-The dataset originates from a health and lifestyle survey where individuals reported daily habits and underwent basic health measurements. Kaggle is only the hosting platform. The actual data is derived from health, lifestyle, and genetic risk factors relevant to disease prediction.
+The dataset originates from a health and lifestyle survey where individuals reported daily habits and underwent basic health measurements. Kaggle is only the hosting platform. The dataset, titled "Disease Risk from Daily Habits," was created by Mahdi Mashayekhi. The actual data is derived from health, lifestyle, and genetic risk factors relevant to disease prediction.
 
-Dataset Description
-•	Samples (rows): 100,000
-•	Variables (columns): 48
-  o	Mix of numeric variables (e.g., age, height, weight, blood_pressure, daily_steps, insulin)
-  o	Categorical variables (e.g., gender, smoking_status, family_history, diet_type, gene_marker_flag)
+Dataset Overview
+This dataset contains information from 100,000 samples (individuals) and 48 variables. The variables can be classified as follows:
+•	Numeric Variables (30 total): These include continuous or discrete quantitative data such as age, height, weight, bmi, blood_pressure, heart_rate, and glucose.
+•	Categorical Variables (18 total): These are non-numerical features represented as text or factors, such as gender, sleep_quality, diet_type, smoking_level, education_level, and occupation.
 
 Outcome Variable
-The target/outcome variable is "disease", which indicates whether the individual is at risk or not (categorical).
+The outcome variable is the target column. It is a categorical variable with two classes: "healthy" and "diseased". The goal of an analysis would be to predict the disease status of an individual based on the other variables.
 
-Challenges Anticipated
-1.	Missing values: Several key health metrics contain missing data:
-  o	Blood pressure: ~7.6% missing
-  o	Heart rate: ~14% missing
-  o	Insulin: ~16% missing
-  o	Daily steps: ~8% missing
-  o	Alcohol consumption: ~14% missing
-  o	Income: ~8% missing
-  o	Gene marker flag: ~10% missing
-2.	High dimensionality: With 48 variables, feature selection or dimensionality reduction may be required to avoid overfitting.
-3.	Data quality issues: Possible self-reported lifestyle variables (e.g., diet, alcohol, exercise) may be noisy or biased.
-4.	Class imbalance: The "disease" outcome variable may be skewed toward one class, which could challenge predictive modeling.
-
-Total Variables: 48
-•	Categorical: 18 (e.g., gender, sleep_quality, alcohol_consumption, smoking_level, diet_type, job_type, education_level)
-•	Numeric: 30 (e.g., age, height, weight, BMI variants, waist_size, blood_pressure, heart_rate, insulin, daily_steps)
+Envisioned Challenges
+Based on the provided results, here are the potential challenges for this dataset:
+•	Missing Values: Several key variables have a significant number of missing values (represented by NA in R). For example, insulin has 15,836 missing values, heart_rate has 14,003, and gene_marker_flag has 10,474. These must be addressed through imputation or by removing the affected records or features before modeling.
+•	High-Dimensionality: With 48 variables, the dataset is high-dimensional. This can increase the complexity of analysis, potentially requiring feature selection or dimensionality reduction techniques to build an effective machine learning model.
+•	Class Imbalance: The outcome variable target shows a significant imbalance. The 'healthy' class has 70,097 observations, while the 'diseased' class has only 29,903. This imbalance may lead to a model that performs well on the majority class but poorly on the minority class. Techniques like oversampling, undersampling, or using a different evaluation metric (e.g., F1-score) will be necessary.
+•	Data Redundancy: The presence of multiple BMI-related variables (bmi, bmi_estimated, bmi_scaled, bmi_corrected) suggests a high degree of correlation, or multicollinearity, which can be problematic for some statistical models.
 
 ```{r}
-# Load the necessary libraries
-library(readr)
-library(dplyr)
 
 # Load the dataset
-health_data <- read_csv("health_lifestyle_classification.csv")
+file_path <- "health_lifestyle_classification.csv"
+df <- read.csv(file_path, stringsAsFactors = FALSE)
 
-# Identify and address missing values
-missing_values <- colSums(is.na(health_data))
-print("Missing values per column:")
-print(missing_values[missing_values > 0])
+# Describe the Data
+
+# 1. Dimensions of the dataset (rows and columns)
+cat("Data Dimensions:\n")
+cat("Rows:", nrow(df), "\n")
+cat("Columns:", ncol(df), "\n")
+
+# 2. Variable types
+cat("\nVariable Types:\n")
+print(sapply(df, class))
+
+# 3. Number of numeric vs. categorical variables
+numeric_vars <- names(df)[sapply(df, is.numeric)]
+categorical_vars <- names(df)[sapply(df, is.character)]
+
+cat("\nNumber of Numeric Variables:", length(numeric_vars), "\n")
+cat("Number of Categorical Variables:", length(categorical_vars), "\n")
+
+# 4. Check for missing values
+cat("\nMissing Values (per column):\n")
+missing_vals <- colSums(is.na(df))
+print(missing_vals[missing_vals > 0])
+
+# 5. Distribution of the outcome variable 'target'
+cat("\nDistribution of the Outcome Variable 'target':\n")
+print(table(df$target))
 
 ```
 
